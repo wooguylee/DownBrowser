@@ -264,6 +264,28 @@ ffmpeg -i downloads/my-video.ts -c copy downloads/my-video.mkv
 
 - the JSON metadata file remains useful even after remuxing
 
+### Remux helper script
+
+This project also includes a small helper script:
+
+```bash
+npm run remux -- --input downloads/my-video.ts
+```
+
+Examples:
+
+```bash
+npm run remux -- --input downloads/my-video.ts
+npm run remux -- --input downloads/my-video.ts --format mkv
+npm run remux -- --input downloads/my-video.ts --output downloads/my-video.mp4 --overwrite
+```
+
+If `ffmpeg` is not in your `PATH`, you can point to it explicitly:
+
+```bash
+node remux.js --input downloads/my-video.ts --ffmpeg "C:\\ffmpeg\\bin\\ffmpeg.exe"
+```
+
 ## Status and Freshness
 
 `status` shows:
@@ -308,6 +330,46 @@ open file:///Z:/Work/WorkAI/DownBrowser/demo.html
 scan
 record 0 demo-test
 ```
+
+## Demo Capture Guide
+
+If you want to prepare screenshots, terminal captures, or GIF demonstrations for this tool, this is a simple workflow:
+
+### Screenshot-friendly flow
+
+```text
+node index.js --interactive
+open https://example.com/watch/123
+scan
+sources
+status
+```
+
+Suggested screenshots:
+
+- the browser with the target page loaded
+- the terminal after `sources`
+- the terminal after `status`
+- the terminal while `record 0 sample` is running
+
+### GIF / screen recording flow
+
+Recommended steps:
+
+- start `node index.js --interactive`
+- run `open <url>`
+- run `scan`
+- run `record 0 demo-video`
+- wait for a few segments to arrive
+- run `stop`
+- optionally run `npm run remux -- --input downloads/demo-video.ts`
+
+### Demo checklist
+
+- use `status` to show current tab, freshness, and recording state
+- use `tabs` if you want to demonstrate multi-tab isolation
+- keep the output directory visible in Explorer or terminal for before/after proof
+- if you show file playback afterward, use the remuxed `.mp4` when possible
 
 ## Troubleshooting
 

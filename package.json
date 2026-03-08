@@ -6,6 +6,7 @@
   "scripts": {
     "download": "node index.js",
     "interactive": "node index.js --interactive",
+    "remux": "node remux.js",
     "test": "node index.js --help"
   },
   "keywords": [],

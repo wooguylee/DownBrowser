@@ -269,6 +269,28 @@ ffprobe downloads/my-video.ts
 ffmpeg -i downloads/my-video.ts -c copy downloads/my-video.mkv
 ```
 
+### remux 도우미 스크립트
+
+프로젝트에는 간단한 remux 스크립트도 포함되어 있습니다.
+
+```bash
+npm run remux -- --input downloads/my-video.ts
+```
+
+예시:
+
+```bash
+npm run remux -- --input downloads/my-video.ts
+npm run remux -- --input downloads/my-video.ts --format mkv
+npm run remux -- --input downloads/my-video.ts --output downloads/my-video.mp4 --overwrite
+```
+
+`ffmpeg`가 `PATH`에 없으면 직접 경로를 지정할 수 있습니다.
+
+```bash
+node remux.js --input downloads/my-video.ts --ffmpeg "C:\\ffmpeg\\bin\\ffmpeg.exe"
+```
+
 ## 스크립트
 
 `package.json`에 포함된 스크립트:
@@ -294,6 +316,46 @@ open file:///Z:/Work/WorkAI/DownBrowser/demo.html
 scan
 record 0 demo-test
 ```
+
+## 스크린샷 / GIF 시연 가이드
+
+문서, 소개 자료, 데모 GIF를 만들 때는 아래 흐름이 가장 보기 좋습니다.
+
+### 스크린샷용 흐름
+
+```text
+node index.js --interactive
+open https://example.com/watch/123
+scan
+sources
+status
+```
+
+추천 캡처 장면:
+
+- 브라우저에 대상 페이지가 열린 모습
+- `sources` 실행 후 터미널 화면
+- `status` 실행 후 freshness와 현재 탭 정보가 보이는 화면
+- `record 0 sample` 실행 중 세그먼트가 쌓이는 화면
+
+### GIF / 화면 녹화용 흐름
+
+추천 순서:
+
+- `node index.js --interactive` 실행
+- `open <url>` 실행
+- `scan` 실행
+- `record 0 demo-video` 실행
+- 몇 개 세그먼트가 저장될 때까지 대기
+- `stop` 실행
+- 필요하면 `npm run remux -- --input downloads/demo-video.ts` 실행
+
+### 데모 체크리스트
+
+- `status`로 현재 탭, freshness, 녹화 상태를 보여주기
+- 멀티탭 기능을 보여주려면 `tabs` 사용
+- 저장 전/후 비교를 위해 출력 디렉터리를 같이 보여주기
+- 시연 후 재생까지 보여줄 경우 가능하면 remux한 `.mp4` 사용
 
 ## 문제 해결
 
