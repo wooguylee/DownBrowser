@@ -2,10 +2,11 @@
   "name": "downbrowser",
   "version": "1.0.0",
   "description": "Playwright + CDP HLS monitor/downloader for authorized test streams",
-  "main": "index.js",
+  "main": "electron-main.js",
   "scripts": {
     "download": "node index.js",
     "interactive": "node index.js --interactive",
+    "gui": "electron .",
     "remux": "node remux.js",
     "test": "node index.js --help"
   },
@@ -16,5 +17,8 @@
   "dependencies": {
     "m3u8-parser": "^7.2.0",
     "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "electron": "^40.8.0"
   }
 }

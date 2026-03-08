@@ -31,6 +31,8 @@ npm install
 npx playwright install chromium
 ```
 
+To use the desktop GUI, Electron is already included in `devDependencies` after install.
+
 ## Quick Start
 
 ### 1. Direct manifest download
@@ -55,6 +57,14 @@ Then either:
 
 - run `open <url>` in the terminal, or
 - type a URL directly into the browser and run `scan`
+
+### 4. Start the desktop GUI
+
+```bash
+npm run gui
+```
+
+The GUI opens a desktop control panel for tabs, navigation, source discovery, playback helpers, recording, and logs.
 
 ## CLI Usage
 
@@ -314,11 +324,18 @@ node remux.js --input downloads/my-video.ts --ffmpeg "C:\\ffmpeg\\bin\\ffmpeg.ex
 ```bash
 npm run download
 npm run interactive
+npm run gui
 ```
 
 ## Project Files
 
 - `index.js`: main CLI, interactive mode, CDP tracking, and download logic
+- `electron-main.js`: Electron main process
+- `electron-preload.js`: Electron preload bridge
+- `gui/index.html`: desktop GUI shell
+- `gui/renderer.js`: GUI event handling and rendering
+- `gui/styles.css`: GUI styling
+- `lib/downbrowser-gui-core.js`: shared GUI backend logic
 - `demo.html`: local HLS demo page
 - `server.js`: simple static file server for local testing
 

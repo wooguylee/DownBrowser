@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DownBrowser GUI</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">DownBrowser</p>
+          <h1>Desktop Control Deck</h1>
+        </div>
+        <button id="new-tab-btn" class="ghost">New Tab</button>
+      </div>
+      <div id="tab-list" class="tab-list"></div>
+      <div class="panel-block">
+        <label for="url-input">Open URL</label>
+        <div class="stack-row">
+          <input id="url-input" type="text" placeholder="https://example.com/watch/123">
+          <button id="open-btn">Open</button>
+        </div>
+      </div>
+      <div class="panel-block compact-grid">
+        <button id="scan-btn">Scan</button>
+        <button id="reload-btn">Reload</button>
+        <button id="refresh-btn">Refresh</button>
+        <button id="clear-btn" class="ghost">Clear Sources</button>
+      </div>
+      <div class="panel-block">
+        <label for="output-dir">Output Directory</label>
+        <div class="stack-row">
+          <input id="output-dir" type="text" readonly>
+          <button id="choose-output-btn" class="ghost">Choose</button>
+        </div>
+      </div>
+      <div class="panel-block">
+        <label for="record-name">Recording Name</label>
+        <div class="stack-row">
+          <input id="record-name" type="text" placeholder="optional custom file name">
+          <button id="stop-btn" class="stop">Stop</button>
+        </div>
+      </div>
+      <div class="panel-block">
+        <h2>Playback Helpers</h2>
+        <div class="stack-row">
+          <button id="play-btn">Play Video 0</button>
+          <button id="pause-btn" class="ghost">Pause Video 0</button>
+        </div>
+      </div>
+      <div class="panel-block">
+        <h2>Selector Actions</h2>
+        <div class="stack-row selector-row">
+          <input id="selector-input" type="text" placeholder=".plyr__control--overlaid">
+          <button id="click-selector-btn">Click</button>
+        </div>
+        <div class="stack-row selector-row">
+          <input id="key-input" type="text" placeholder="Space">
+          <button id="press-key-btn" class="ghost">Press</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="hero panel">
+        <div>
+          <p class="eyebrow">Current Tab</p>
+          <h2 id="page-title">Waiting for browser...</h2>
+          <p id="page-url" class="muted"></p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span class="stat-label">Freshness</span>
+            <strong id="freshness-text">Unknown</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Scope</span>
+            <strong id="scope-text">-</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Recording</span>
+            <strong id="recording-text">Idle</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid-two">
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Detected Sources</p>
+              <h3>Manifest Streams</h3>
+            </div>
+          </div>
+          <div id="sources-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Player State</p>
+              <h3>Video Elements</h3>
+            </div>
+          </div>
+          <div id="videos-list" class="list"></div>
+        </section>
+      </section>
+
+      <section class="grid-two">
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Controls</p>
+              <h3>Buttons on Page</h3>
+            </div>
+          </div>
+          <div id="buttons-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Recent Requests</p>
+              <h3>Media Segments</h3>
+            </div>
+          </div>
+          <div id="segments-list" class="list"></div>
+        </section>
+      </section>
+
+      <section class="grid-two">
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Recording Status</p>
+              <h3>Progress</h3>
+            </div>
+          </div>
+          <div id="recording-panel" class="recording-panel"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">System Log</p>
+              <h3>Live Feed</h3>
+            </div>
+          </div>
+          <div id="log-list" class="log-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <script src="./renderer.js"></script>
+</body>
+</html>

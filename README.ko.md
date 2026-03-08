@@ -32,6 +32,8 @@ npm install
 npx playwright install chromium
 ```
 
+데스크톱 GUI는 `npm install` 이후 `devDependencies`에 포함된 Electron을 바로 사용합니다.
+
 ## 빠른 시작
 
 ### 1. manifest URL로 바로 다운로드
@@ -56,6 +58,14 @@ node index.js --interactive
 
 - 터미널에서 `open <url>` 실행
 - 브라우저 주소창에 직접 URL 입력 후 `scan` 실행
+
+### 4. 데스크톱 GUI 실행
+
+```bash
+npm run gui
+```
+
+GUI에서는 탭 관리, URL 이동, source 탐지, 재생 보조, 녹화 시작/중지, 로그 확인을 화면에서 직접 처리할 수 있습니다.
 
 ## 실행 방법
 
@@ -298,11 +308,18 @@ node remux.js --input downloads/my-video.ts --ffmpeg "C:\\ffmpeg\\bin\\ffmpeg.ex
 ```bash
 npm run download
 npm run interactive
+npm run gui
 ```
 
 ## 주요 파일
 
 - `index.js`: CLI 본체, interactive 제어, CDP 추적, 다운로드 로직
+- `electron-main.js`: Electron 메인 프로세스
+- `electron-preload.js`: Electron preload 브리지
+- `gui/index.html`: 데스크톱 GUI 레이아웃
+- `gui/renderer.js`: GUI 이벤트 처리 및 렌더링
+- `gui/styles.css`: GUI 스타일
+- `lib/downbrowser-gui-core.js`: GUI용 백엔드 세션 로직
 - `demo.html`: 로컬 HLS 테스트용 페이지
 - `server.js`: 간단한 정적 서버
 - `README.md`: 영문 문서
