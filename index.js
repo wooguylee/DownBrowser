@@ -28,10 +28,10 @@ Options:
   --help                      Show this help.
 
 Interactive commands:
-  help, open <url>, scan, videos, buttons, sources, clear, play [n],
-  pause [n], click-button <n>, click <selector>, press <key>, refresh,
-  reload,
-  record [n] [name], stop, status, exit
+  help, tabs, new-tab, use-tab <n>, close-tab [n], open <url>, scan,
+  videos, buttons, sources, clear, play [n], pause [n], click-button <n>,
+  click <selector>, press <key>, refresh, reload, record [n] [name],
+  stop, status, exit
 
 Examples:
   node index.js --url "https://example.com/watch/123"
@@ -229,6 +229,14 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
+function formatTimestamp(value) {
+  if (!value) {
+    return 'never';
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
 function tokenizeCommand(line) {
   const tokens = [];
   const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
@@ -318,6 +326,13 @@ function createNetworkTracker(session) {
   const manifests = new Map();
   const recentSegments = [];
   let scopeId = 0;
+  let lastResetAt = new Date().toISOString();
+  let lastScanAt = null;
+  let lastScanScopeId = null;
+  let lastScanPageUrl = null;
+  let lastScanPageTitle = null;
+  let lastScanSourceCount = 0;
+  let lastScanVideoCount = 0;
   let enabled = false;
 
   session.on('Network.requestWillBeSent', (event) => {
@@ -426,8 +441,32 @@ function createNetworkTracker(session) {
     getRecentSegments() {
       return [...recentSegments];
     },
+    getScopeId() {
+      return scopeId;
+    },
+    getMeta() {
+      return {
+        scopeId,
+        lastResetAt,
+        lastScanAt,
+        lastScanScopeId,
+        lastScanPageUrl,
+        lastScanPageTitle,
+        lastScanSourceCount,
+        lastScanVideoCount,
+      };
+    },
+    markScan(details = {}) {
+      lastScanAt = new Date().toISOString();
+      lastScanScopeId = scopeId;
+      lastScanPageUrl = details.pageUrl || null;
+      lastScanPageTitle = details.pageTitle || null;
+      lastScanSourceCount = details.sourceCount || 0;
+      lastScanVideoCount = details.videoCount || 0;
+    },
     reset() {
       scopeId += 1;
+      lastResetAt = new Date().toISOString();
       requests.clear();
       requestToManifest.clear();
       manifests.clear();
@@ -446,11 +485,18 @@ async function discoverSourcesFromPage(page, tracker, options) {
   await nudgePlayback(page);
   await page.waitForTimeout(options.settleMs);
 
-  return {
+  const discovery = {
     pageTitle: await page.title(),
     videoSources: await getVideoElements(page),
     sources: tracker.getSources(),
   };
+  tracker.markScan({
+    pageUrl: page.url(),
+    pageTitle: discovery.pageTitle,
+    sourceCount: discovery.sources.length,
+    videoCount: discovery.videoSources.length,
+  });
+  return discovery;
 }
 
 async function scanCurrentPage(page, tracker, options) {
@@ -459,11 +505,18 @@ async function scanCurrentPage(page, tracker, options) {
   await nudgePlayback(page);
   await page.waitForTimeout(options.settleMs);
 
-  return {
+  const scan = {
     pageTitle: await page.title().catch(() => '(unknown)'),
     videoSources: await getVideoElements(page),
     sources: tracker.getSources(),
   };
+  tracker.markScan({
+    pageUrl: page.url(),
+    pageTitle: scan.pageTitle,
+    sourceCount: scan.sources.length,
+    videoCount: scan.videoSources.length,
+  });
+  return scan;
 }
 
 function printSources(sources) {
@@ -507,6 +560,68 @@ function printButtons(buttons) {
   for (const button of buttons) {
     console.log(`  [${button.index}] visible=${button.visible} text=${JSON.stringify(button.text)} class=${JSON.stringify(button.className)}`);
   }
+}
+
+function printTabs(tabStateMap, currentTabId) {
+  const tabs = [...tabStateMap.values()].sort((left, right) => left.id - right.id);
+  console.log('Tabs:');
+  for (const tab of tabs) {
+    const marker = tab.id === currentTabId ? '*' : ' ';
+    const title = tab.lastKnownTitle || '(untitled)';
+    const url = tab.page.url();
+    console.log(` ${marker} [${tab.id}] sources=${tab.tracker.getSources().length} title=${JSON.stringify(title)} url=${url}`);
+  }
+}
+
+function getSourceFreshness(tracker) {
+  const meta = tracker.getMeta();
+  const currentScopeId = tracker.getScopeId();
+  return {
+    isFresh: meta.lastScanScopeId === currentScopeId,
+    lastScanAt: meta.lastScanAt,
+    lastScanPageUrl: meta.lastScanPageUrl,
+    lastScanPageTitle: meta.lastScanPageTitle,
+    lastScanSourceCount: meta.lastScanSourceCount,
+    lastScanVideoCount: meta.lastScanVideoCount,
+    lastResetAt: meta.lastResetAt,
+    scopeId: currentScopeId,
+  };
+}
+
+async function refreshTabSnapshot(tabState) {
+  tabState.lastKnownTitle = await tabState.page.title().catch(() => '(unknown)');
+  tabState.lastKnownUrl = tabState.page.url();
+}
+
+async function createInteractiveTab(context, options, nextTabId) {
+  const page = await context.newPage();
+  const session = await context.newCDPSession(page);
+  const tracker = createNetworkTracker(session);
+  await tracker.enable();
+
+  const tabState = {
+    id: nextTabId,
+    page,
+    session,
+    tracker,
+    lastKnownTitle: '(untitled)',
+    lastKnownUrl: 'about:blank',
+  };
+
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) {
+      tracker.reset();
+      tabState.lastKnownUrl = page.url();
+    }
+  });
+
+  page.on('close', () => {
+    tabState.closed = true;
+  });
+
+  await page.goto('about:blank', { waitUntil: 'load' });
+  await refreshTabSnapshot(tabState);
+  return tabState;
 }
 
 async function downloadFromManifest(context, manifestUrl, requestHeaders, outputDir, baseName, options, hooks = {}) {
@@ -658,15 +773,24 @@ async function downloadFromManifest(context, manifestUrl, requestHeaders, output
   };
 }
 
-async function printStatus(page, tracker, recording) {
+async function printStatus(tabStateMap, currentTabId, recording) {
+  const currentTab = tabStateMap.get(currentTabId);
+  const { page, tracker } = currentTab;
   const [title, url, videos] = await Promise.all([
     page.title().catch(() => '(unknown)'),
     Promise.resolve(page.url()),
     getVideoElements(page),
   ]);
+  currentTab.lastKnownTitle = title;
+  currentTab.lastKnownUrl = url;
+  const freshness = getSourceFreshness(tracker);
   console.log(`Page: ${title}`);
   console.log(`URL: ${url}`);
+  console.log(`Tab: ${currentTabId}`);
+  console.log(`Tracker scope: ${freshness.scopeId} last reset=${formatTimestamp(freshness.lastResetAt)}`);
   console.log(`Sources: ${tracker.getSources().length}`);
+  console.log(`Sources fresh for current page: ${freshness.isFresh ? 'yes' : 'no'}`);
+  console.log(`Last scan: ${formatTimestamp(freshness.lastScanAt)} title=${JSON.stringify(freshness.lastScanPageTitle || '')} url=${freshness.lastScanPageUrl || '(none)'} sources=${freshness.lastScanSourceCount} videos=${freshness.lastScanVideoCount}`);
   if (videos[0]) {
     console.log(`Video[0]: paused=${videos[0].paused} time=${videos[0].currentTime ?? 0}/${videos[0].duration ?? 0}`);
   }
@@ -677,15 +801,16 @@ async function printStatus(page, tracker, recording) {
   }
 
   const elapsedSeconds = ((Date.now() - recording.startedAt) / 1000).toFixed(1);
-  console.log(`Recording: ${recording.stopRequested ? 'stopping' : 'running'} source=${recording.source.url}`);
+  console.log(`Recording: ${recording.stopRequested ? 'stopping' : 'running'} tab=${recording.tabId} source=${recording.source.url}`);
   console.log(`Saved: ${recording.segmentCount} segments, ${formatBytes(recording.totalBytes)}, elapsed=${elapsedSeconds}s`);
   if (recording.lastSegment) {
     console.log(`Last segment: ${recording.lastSegment.url}`);
   }
 }
 
-function startRecordingTask(context, source, outputDir, baseName, options) {
+function startRecordingTask(context, source, outputDir, baseName, options, tabId) {
   const recording = {
+    tabId,
     source,
     baseName,
     startedAt: Date.now(),
@@ -723,36 +848,53 @@ function startRecordingTask(context, source, outputDir, baseName, options) {
   return recording;
 }
 
-async function runInteractiveSession(page, context, tracker, options) {
-  await tracker.enable();
+async function runInteractiveSession(initialPage, context, initialTracker, options) {
+  const tabStateMap = new Map();
+  let nextTabId = 1;
+  const initialTab = {
+    id: nextTabId,
+    page: initialPage,
+    tracker: initialTracker,
+    lastKnownTitle: '(untitled)',
+    lastKnownUrl: 'about:blank',
+  };
+  tabStateMap.set(initialTab.id, initialTab);
+  let currentTabId = initialTab.id;
 
-  page.on('framenavigated', (frame) => {
-    if (frame === page.mainFrame()) {
-      tracker.reset();
+  initialPage.on('framenavigated', (frame) => {
+    if (frame === initialPage.mainFrame()) {
+      initialTracker.reset();
+      initialTab.lastKnownUrl = initialPage.url();
     }
+  });
+  initialPage.on('close', () => {
+    initialTab.closed = true;
   });
 
   if (options.url) {
-    tracker.reset();
-    const discovery = await discoverSourcesFromPage(page, tracker, options);
+    initialTracker.reset();
+    const discovery = await discoverSourcesFromPage(initialPage, initialTracker, options);
+    initialTab.lastKnownTitle = discovery.pageTitle;
+    initialTab.lastKnownUrl = initialPage.url();
     console.log(`Loaded: ${discovery.pageTitle}`);
     printSources(discovery.sources);
     printVideos(discovery.videoSources);
-    printButtons(await getButtons(page));
+    printButtons(await getButtons(initialPage));
   } else {
-    await page.goto('about:blank', { waitUntil: 'load' });
+    await initialPage.goto('about:blank', { waitUntil: 'load' });
+    await refreshTabSnapshot(initialTab);
     console.log('Browser ready.');
     console.log('Use `open <url>` from the terminal, or type a URL directly in the browser and then run `scan`.');
   }
 
-  console.log('Commands: help, open <url>, scan, videos, buttons, sources, clear, play [n], pause [n], click-button <n>, click <selector>, press <key>, refresh, reload, record [n] [name], stop, status, exit');
+  console.log('Commands: help, tabs, new-tab, use-tab <n>, close-tab [n], open <url>, scan, videos, buttons, sources, clear, play [n], pause [n], click-button <n>, click <selector>, press <key>, refresh, reload, record [n] [name], stop, status, exit');
 
   const rl = readline.createInterface({ input, output });
   let recording = null;
 
   try {
     while (true) {
-      const line = (await rl.question('downbrowser> ')).trim();
+      const line = (await rl.question(`downbrowser[t${currentTabId}]> `)).trim();
       if (!line) {
         continue;
       }
@@ -760,14 +902,62 @@ async function runInteractiveSession(page, context, tracker, options) {
       const [command, ...args] = tokenizeCommand(line);
 
       try {
+        const currentTab = tabStateMap.get(currentTabId);
+        if (!currentTab || currentTab.closed) {
+          throw new Error('Current tab is no longer available.');
+        }
+        const { page, tracker } = currentTab;
+
         if (command === 'help') {
           printHelp();
+        } else if (command === 'tabs') {
+          for (const tab of tabStateMap.values()) {
+            if (!tab.closed) {
+              await refreshTabSnapshot(tab);
+            }
+          }
+          printTabs(tabStateMap, currentTabId);
+        } else if (command === 'new-tab') {
+          const tab = await createInteractiveTab(context, options, ++nextTabId);
+          tabStateMap.set(tab.id, tab);
+          currentTabId = tab.id;
+          console.log(`Created tab ${tab.id}`);
+          printTabs(tabStateMap, currentTabId);
+        } else if (command === 'use-tab') {
+          const targetId = parseIndex(args[0]);
+          const targetTab = tabStateMap.get(targetId);
+          if (!targetTab || targetTab.closed) {
+            throw new Error(`Tab ${targetId} not found.`);
+          }
+          currentTabId = targetId;
+          await targetTab.page.bringToFront().catch(() => {});
+          await refreshTabSnapshot(targetTab);
+          console.log(`Switched to tab ${targetId}`);
+        } else if (command === 'close-tab') {
+          const targetId = parseIndex(args[0], currentTabId);
+          const targetTab = tabStateMap.get(targetId);
+          if (!targetTab || targetTab.closed) {
+            throw new Error(`Tab ${targetId} not found.`);
+          }
+          if (recording && !recording.result && !recording.error && recording.tabId === targetId) {
+            throw new Error('Stop the active recording before closing its tab.');
+          }
+          if (tabStateMap.size === 1) {
+            throw new Error('Cannot close the last tab.');
+          }
+          await targetTab.page.close();
+          tabStateMap.delete(targetId);
+          if (currentTabId === targetId) {
+            currentTabId = [...tabStateMap.keys()].sort((a, b) => a - b)[0];
+          }
+          console.log(`Closed tab ${targetId}`);
+          printTabs(tabStateMap, currentTabId);
         } else if (command === 'open' || command === 'goto') {
           if (!args[0]) {
             throw new Error('Usage: open <url>');
           }
-          if (recording && !recording.result && !recording.error) {
-            throw new Error('Stop the active recording before navigating.');
+          if (recording && !recording.result && !recording.error && recording.tabId === currentTabId) {
+            throw new Error('Stop the active recording in this tab before navigating.');
           }
           tracker.reset();
           await page.goto(args[0], {
@@ -775,17 +965,21 @@ async function runInteractiveSession(page, context, tracker, options) {
             timeout: options.timeoutMs,
           });
           const scan = await scanCurrentPage(page, tracker, options);
+          currentTab.lastKnownTitle = scan.pageTitle;
+          currentTab.lastKnownUrl = page.url();
           console.log(`Loaded: ${scan.pageTitle}`);
           printSources(scan.sources);
           printVideos(scan.videoSources);
         } else if (command === 'scan') {
           const scan = await scanCurrentPage(page, tracker, options);
+          currentTab.lastKnownTitle = scan.pageTitle;
+          currentTab.lastKnownUrl = page.url();
           console.log(`Scanned: ${scan.pageTitle}`);
           printSources(scan.sources);
           printVideos(scan.videoSources);
         } else if (command === 'clear') {
-          if (recording && !recording.result && !recording.error) {
-            throw new Error('Stop the active recording before clearing tracked sources.');
+          if (recording && !recording.result && !recording.error && recording.tabId === currentTabId) {
+            throw new Error('Stop the active recording in this tab before clearing tracked sources.');
           }
           tracker.reset();
           console.log('Cleared tracked manifests and recent segments.');
@@ -794,6 +988,9 @@ async function runInteractiveSession(page, context, tracker, options) {
         } else if (command === 'buttons') {
           printButtons(await getButtons(page));
         } else if (command === 'sources') {
+          const freshness = getSourceFreshness(tracker);
+          console.log(`Fresh for current page: ${freshness.isFresh ? 'yes' : 'no'}`);
+          console.log(`Last scan: ${formatTimestamp(freshness.lastScanAt)} title=${JSON.stringify(freshness.lastScanPageTitle || '')} url=${freshness.lastScanPageUrl || '(none)'}`);
           printSources(tracker.getSources());
         } else if (command === 'play') {
           const videoIndex = parseIndex(args[0], 0);
@@ -840,8 +1037,8 @@ async function runInteractiveSession(page, context, tracker, options) {
           printSources(tracker.getSources());
           printVideos(await getVideoElements(page));
         } else if (command === 'reload') {
-          if (recording && !recording.result && !recording.error) {
-            throw new Error('Stop the active recording before reloading.');
+          if (recording && !recording.result && !recording.error && recording.tabId === currentTabId) {
+            throw new Error('Stop the active recording in this tab before reloading.');
           }
           tracker.reset();
           await page.reload({
@@ -849,6 +1046,8 @@ async function runInteractiveSession(page, context, tracker, options) {
             timeout: options.timeoutMs,
           });
           const scan = await scanCurrentPage(page, tracker, options);
+          currentTab.lastKnownTitle = scan.pageTitle;
+          currentTab.lastKnownUrl = page.url();
           console.log(`Reloaded: ${scan.pageTitle}`);
           printSources(scan.sources);
           printVideos(scan.videoSources);
@@ -857,9 +1056,14 @@ async function runInteractiveSession(page, context, tracker, options) {
             throw new Error('A recording is already running. Use stop first.');
           }
 
+          const freshness = getSourceFreshness(tracker);
+          if (!freshness.isFresh) {
+            throw new Error('Tracked sources are stale for this page. Run `scan` or `reload` first.');
+          }
+
           const sources = tracker.getSources();
           if (sources.length === 0) {
-            throw new Error('No manifest sources detected yet. Use sources or refresh after starting playback.');
+            throw new Error('No manifest sources detected yet. Use scan or refresh after starting playback.');
           }
 
           let sourceIndex = 0;
@@ -875,9 +1079,11 @@ async function runInteractiveSession(page, context, tracker, options) {
           }
 
           const pageTitle = await page.title().catch(() => 'video');
+          currentTab.lastKnownTitle = pageTitle;
+          currentTab.lastKnownUrl = page.url();
           const baseName = sanitizeFileName(nameArg || `${pageTitle}-${Date.now()}`);
-          recording = startRecordingTask(context, source, options.outputDir, baseName, options);
-          console.log(`Recording started from source ${sourceIndex}: ${source.url}`);
+          recording = startRecordingTask(context, source, options.outputDir, baseName, options, currentTabId);
+          console.log(`Recording started from tab ${currentTabId}, source ${sourceIndex}: ${source.url}`);
 
           recording.promise.then((result) => {
             console.log(`\n[recording] saved ${result.totalSegments} segment(s), ${formatBytes(result.totalBytes)}`);
@@ -892,9 +1098,9 @@ async function runInteractiveSession(page, context, tracker, options) {
             continue;
           }
           recording.stopRequested = true;
-          console.log('Stop requested. Waiting for current segment to finish...');
+          console.log(`Stop requested for tab ${recording.tabId}. Waiting for current segment to finish...`);
         } else if (command === 'status') {
-          await printStatus(page, tracker, recording && !recording.result && !recording.error ? recording : recording);
+          await printStatus(tabStateMap, currentTabId, recording && !recording.result && !recording.error ? recording : recording);
         } else if (command === 'exit' || command === 'quit') {
           if (recording && !recording.result && !recording.error) {
             recording.stopRequested = true;
@@ -933,6 +1139,7 @@ async function main() {
     const page = await context.newPage();
     const session = await context.newCDPSession(page);
     const tracker = createNetworkTracker(session);
+    await tracker.enable();
 
     if (options.interactive) {
       await runInteractiveSession(page, context, tracker, options);
