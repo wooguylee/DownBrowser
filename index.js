@@ -317,12 +317,14 @@ function createNetworkTracker(session) {
   const requestToManifest = new Map();
   const manifests = new Map();
   const recentSegments = [];
+  let scopeId = 0;
   let enabled = false;
 
   session.on('Network.requestWillBeSent', (event) => {
     requests.set(event.requestId, {
       url: event.request.url,
       headers: lowerCaseHeaders(event.request.headers || {}),
+      scopeId,
     });
   });
 
@@ -334,6 +336,10 @@ function createNetworkTracker(session) {
     if (looksLikeManifest(url, mimeType)) {
       const existing = manifests.get(url);
       const requestInfo = requests.get(event.requestId);
+      const requestScopeId = requestInfo?.scopeId ?? scopeId;
+      if (requestScopeId !== scopeId) {
+        return;
+      }
       manifests.set(url, {
         url,
         mimeType,
@@ -353,6 +359,10 @@ function createNetworkTracker(session) {
     }
 
     if (looksLikeSegment(url, mimeType)) {
+      const requestScopeId = requests.get(event.requestId)?.scopeId ?? scopeId;
+      if (requestScopeId !== scopeId) {
+        return;
+      }
       recentSegments.unshift({
         url,
         mimeType,
@@ -417,6 +427,7 @@ function createNetworkTracker(session) {
       return [...recentSegments];
     },
     reset() {
+      scopeId += 1;
       requests.clear();
       requestToManifest.clear();
       manifests.clear();
@@ -714,6 +725,12 @@ function startRecordingTask(context, source, outputDir, baseName, options) {
 
 async function runInteractiveSession(page, context, tracker, options) {
   await tracker.enable();
+
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) {
+      tracker.reset();
+    }
+  });
 
   if (options.url) {
     tracker.reset();
