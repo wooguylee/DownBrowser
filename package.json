@@ -6,7 +6,7 @@
   "scripts": {
     "download": "node index.js",
     "interactive": "node index.js --interactive",
-    "gui": "electron .",
+    "start": "electron .",
     "remux": "node remux.js",
     "test": "node index.js --help"
   },
