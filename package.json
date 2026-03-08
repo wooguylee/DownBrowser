@@ -1,0 +1,19 @@
+{
+  "name": "downbrowser",
+  "version": "1.0.0",
+  "description": "Playwright + CDP HLS monitor/downloader for authorized test streams",
+  "main": "index.js",
+  "scripts": {
+    "download": "node index.js",
+    "interactive": "node index.js --interactive",
+    "test": "node index.js --help"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "m3u8-parser": "^7.2.0",
+    "playwright": "^1.58.2"
+  }
+}

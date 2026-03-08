@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HLS Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #0f172a, #1e293b 55%, #334155);
+      color: #e2e8f0;
+      font-family: Georgia, serif;
+    }
+
+    main {
+      width: min(92vw, 900px);
+    }
+
+    video {
+      width: 100%;
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.45);
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <video id="player" controls playsinline muted></video>
+  </main>
+  <script>
+    const manifestUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+    const video = document.getElementById('player');
+    if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(manifestUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+    } else {
+      video.src = manifestUrl;
+      video.play().catch(() => {});
+    }
+  </script>
+</body>
+</html>
