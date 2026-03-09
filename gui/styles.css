@@ -65,6 +65,27 @@ input {
   gap: 18px;
 }
 
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(155, 61, 46, 0.2);
+  background: linear-gradient(135deg, rgba(255, 244, 241, 0.98), rgba(255, 248, 245, 0.98));
+  box-shadow: var(--shadow);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.error-banner.hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
 .panel-head,
 .section-head,
 .hero {
@@ -266,6 +287,37 @@ button.stop {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.progress-track {
+  margin-top: 14px;
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(42, 111, 93, 0.12);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold), var(--accent));
+  transition: width 180ms ease;
+}
+
+.recording-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.recording-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.recording-actions button {
+  padding: 10px 14px;
 }
 
 .recording-metric {

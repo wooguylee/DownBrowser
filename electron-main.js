@@ -1,14 +1,56 @@
 const path = require('node:path');
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
 const { DownBrowserGuiCore } = require('./lib/downbrowser-gui-core');
 
 let mainWindow = null;
 let core = null;
+let lastRecordingNoticeKey = null;
+
+function maybeNotifyRecording(state) {
+  const recording = state?.recording;
+  if (!recording) {
+    lastRecordingNoticeKey = null;
+    return;
+  }
+
+  if (recording.result?.combinedOutputPath) {
+    const key = `done:${recording.result.combinedOutputPath}`;
+    if (lastRecordingNoticeKey === key) {
+      return;
+    }
+    lastRecordingNoticeKey = key;
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'DownBrowser Recording Complete',
+        body: recording.result.combinedOutputPath,
+      }).show();
+    }
+    return;
+  }
+
+  if (recording.error) {
+    const key = `error:${recording.baseName}:${recording.error}`;
+    if (lastRecordingNoticeKey === key) {
+      return;
+    }
+    lastRecordingNoticeKey = key;
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'DownBrowser Recording Failed',
+        body: recording.error,
+      }).show();
+    }
+    return;
+  }
+
+  lastRecordingNoticeKey = null;
+}
 
 function sendState(state) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('downbrowser:state', state);
   }
+  maybeNotifyRecording(state);
 }
 
 function sendLog(entry) {
@@ -73,40 +115,85 @@ ipcMain.handle('downbrowser:pick-output-dir', async () => {
 });
 
 ipcMain.handle('downbrowser:action', async (_event, action, payload = {}) => {
-  const guiCore = ensureCore();
-  switch (action) {
-    case 'new-tab':
-      return guiCore.newTab();
-    case 'use-tab':
-      return guiCore.useTab(payload.tabId);
-    case 'close-tab':
-      return guiCore.closeTab(payload.tabId);
-    case 'open-url':
-      return guiCore.openUrl(payload.url);
-    case 'scan':
-      return guiCore.scan();
-    case 'reload':
-      return guiCore.reload();
-    case 'refresh':
-      return guiCore.refresh();
-    case 'clear-sources':
-      return guiCore.clearSources();
-    case 'play-video':
-      return guiCore.playVideo(payload.index);
-    case 'pause-video':
-      return guiCore.pauseVideo(payload.index);
-    case 'click-button':
-      return guiCore.clickButton(payload.index);
-    case 'click-selector':
-      return guiCore.clickSelector(payload.selector);
-    case 'press-key':
-      return guiCore.pressKey(payload.key);
-    case 'start-recording':
-      return guiCore.startRecording(payload.sourceIndex, payload.name);
-    case 'stop-recording':
-      return guiCore.stopRecording();
-    default:
-      throw new Error(`Unknown action: ${action}`);
+  try {
+    const guiCore = ensureCore();
+    let state;
+    switch (action) {
+      case 'new-tab':
+        state = await guiCore.newTab();
+        break;
+      case 'use-tab':
+        state = await guiCore.useTab(payload.tabId);
+        break;
+      case 'close-tab':
+        state = await guiCore.closeTab(payload.tabId);
+        break;
+      case 'open-url':
+        state = await guiCore.openUrl(payload.url);
+        break;
+      case 'scan':
+        state = await guiCore.scan();
+        break;
+      case 'reload':
+        state = await guiCore.reload();
+        break;
+      case 'refresh':
+        state = await guiCore.refresh();
+        break;
+      case 'clear-sources':
+        state = await guiCore.clearSources();
+        break;
+      case 'play-video':
+        state = await guiCore.playVideo(payload.index);
+        break;
+      case 'pause-video':
+        state = await guiCore.pauseVideo(payload.index);
+        break;
+      case 'click-button':
+        state = await guiCore.clickButton(payload.index);
+        break;
+      case 'click-selector':
+        state = await guiCore.clickSelector(payload.selector);
+        break;
+      case 'press-key':
+        state = await guiCore.pressKey(payload.key);
+        break;
+      case 'start-recording':
+        state = await guiCore.startRecording(payload.sourceIndex, payload.name);
+        break;
+      case 'stop-recording':
+        state = await guiCore.stopRecording();
+        break;
+      case 'open-path': {
+        const targetPath = payload.path;
+        if (!targetPath) {
+          throw new Error('No path provided');
+        }
+        shell.showItemInFolder(targetPath);
+        state = await guiCore.getState();
+        break;
+      }
+      case 'open-file': {
+        const targetPath = payload.path;
+        if (!targetPath) {
+          throw new Error('No path provided');
+        }
+        const opened = await shell.openPath(targetPath);
+        if (opened) {
+          throw new Error(opened);
+        }
+        state = await guiCore.getState();
+        break;
+      }
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+    return { ok: true, state };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message || String(error),
+    };
   }
 });
 

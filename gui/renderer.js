@@ -1,6 +1,9 @@
 const state = {
   data: null,
+  error: '',
 };
+
+let errorTimer = null;
 
 const els = {
   tabList: document.getElementById('tab-list'),
@@ -32,6 +35,9 @@ const els = {
   segmentsList: document.getElementById('segments-list'),
   recordingPanel: document.getElementById('recording-panel'),
   logList: document.getElementById('log-list'),
+  errorBanner: document.getElementById('error-banner'),
+  errorText: document.getElementById('error-text'),
+  errorCloseBtn: document.getElementById('error-close-btn'),
 };
 
 function escapeHtml(value) {
@@ -43,18 +49,64 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function formatDuration(ms) {
+  if (!Number.isFinite(ms) || ms < 0) {
+    return '0s';
+  }
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+function showError(message) {
+  state.error = message;
+  els.errorText.textContent = message;
+  els.errorBanner.classList.remove('hidden');
+  els.errorBanner.style.pointerEvents = 'auto';
+  clearTimeout(errorTimer);
+  errorTimer = setTimeout(() => {
+    clearError();
+  }, 4500);
+}
+
+function clearError() {
+  state.error = '';
+  els.errorBanner.classList.add('hidden');
+  els.errorBanner.style.pointerEvents = 'none';
+  clearTimeout(errorTimer);
+}
+
 async function act(action, payload) {
   try {
-    await window.downbrowser.act(action, payload);
+    const result = await window.downbrowser.act(action, payload);
+    if (!result?.ok) {
+      showError(result?.error || 'Unknown action error');
+      appendLocalLog('error', result?.error || 'Unknown action error');
+      return;
+    }
+    clearError();
+    if (result.state) {
+      renderState(result.state);
+    }
   } catch (error) {
-    appendLocalError(error.message || String(error));
+    const message = error.message || String(error);
+    showError(message);
+    appendLocalLog('error', message);
   }
 }
 
-function appendLocalError(message) {
+function appendLocalLog(level, message) {
   const current = state.data || { logs: [] };
   current.logs = current.logs || [];
-  current.logs.push({ id: Date.now(), level: 'error', message, at: new Date().toISOString() });
+  current.logs.push({ id: Date.now() + Math.random(), level, message, at: new Date().toISOString() });
   renderLogs(current.logs);
 }
 
@@ -166,14 +218,34 @@ function renderRecording(data) {
   }
 
   const recording = data.recording;
+  const expectedSegments = Number.isFinite(recording.expectedSegments) && recording.expectedSegments > 0 ? recording.expectedSegments : null;
+  const progressPercent = expectedSegments ? Math.min(100, Math.round((recording.segmentCount / expectedSegments) * 100)) : null;
+  const lastSegmentUrl = recording.lastSegment ? recording.lastSegment.url : '(waiting for first segment)';
+  const eta = recording.estimatedRemainingMs ? formatDuration(recording.estimatedRemainingMs) : 'calculating';
+  const openButton = recording.result
+    ? `<div class="recording-actions"><button data-action="open-file" data-path="${escapeHtml(recording.result.combinedOutputPath)}">Open Video</button><button class="ghost" data-action="open-path" data-path="${escapeHtml(recording.result.combinedOutputPath)}">Show Saved File</button><button class="ghost" data-action="open-path" data-path="${escapeHtml(recording.result.metadataPath)}">Show Metadata</button></div>`
+    : '';
+
   els.recordingPanel.innerHTML = `
-    <div class="recording-card">
+    <div class="recording-card recording-summary">
       <div class="list-title">Recording tab ${recording.tabId}</div>
       <div class="pill-row">
         <span class="pill ${recording.stopRequested ? 'warn' : ''}">${recording.stopRequested ? 'stopping' : 'running'}</span>
-        <span class="pill gold">segments ${recording.segmentCount}</span>
+        <span class="pill gold">segments ${recording.segmentCount}${expectedSegments ? ` / ${expectedSegments}` : ''}</span>
         <span class="pill">bytes ${recording.totalBytesDisplay}</span>
+        <span class="pill">elapsed ${formatDuration(recording.elapsedMs)}</span>
       </div>
+      ${progressPercent !== null ? `
+        <div>
+          <div class="list-meta">Estimated progress ${progressPercent}%</div>
+          <div class="progress-track"><div class="progress-fill" style="width:${progressPercent}%"></div></div>
+        </div>
+      ` : `
+        <div>
+          <div class="list-meta">Progress is open-ended because the source does not expose a reliable total segment count.</div>
+          <div class="progress-track"><div class="progress-fill" style="width:${Math.min(96, 12 + recording.segmentCount)}%"></div></div>
+        </div>
+      `}
       <div class="recording-grid">
         <div class="recording-metric">
           <div class="eyebrow">Base Name</div>
@@ -183,10 +255,32 @@ function renderRecording(data) {
           <div class="eyebrow">Started</div>
           <strong>${escapeHtml(new Date(recording.startedAt).toLocaleString())}</strong>
         </div>
+        <div class="recording-metric">
+          <div class="eyebrow">Average Segment</div>
+          <strong>${escapeHtml(recording.avgSegmentBytesDisplay)}</strong>
+        </div>
+        <div class="recording-metric">
+          <div class="eyebrow">Throughput</div>
+          <strong>${escapeHtml(`${recording.throughputBytesPerSecondDisplay}/s`)}</strong>
+        </div>
+        <div class="recording-metric">
+          <div class="eyebrow">Segments per Sec</div>
+          <strong>${escapeHtml(String(recording.segmentsPerSecond))}</strong>
+        </div>
+        <div class="recording-metric">
+          <div class="eyebrow">ETA</div>
+          <strong>${escapeHtml(expectedSegments ? eta : 'unknown')}</strong>
+        </div>
+        <div class="recording-metric">
+          <div class="eyebrow">Output Directory</div>
+          <strong>${escapeHtml(data.options.outputDir)}</strong>
+        </div>
       </div>
-      <div class="list-meta">${escapeHtml(recording.source.url)}</div>
+      <div class="list-meta">Source: ${escapeHtml(recording.source.url)}</div>
+      <div class="list-meta">Last segment: ${escapeHtml(lastSegmentUrl)}</div>
       ${recording.result ? `<div class="list-meta">saved: ${escapeHtml(recording.result.combinedOutputPath)}</div>` : ''}
       ${recording.error ? `<div class="list-meta">error: ${escapeHtml(recording.error)}</div>` : ''}
+      ${openButton}
     </div>
   `;
 }
@@ -238,6 +332,10 @@ document.addEventListener('click', async (event) => {
     await act('pause-video', { index: Number(target.dataset.index) });
   } else if (action === 'click-button') {
     await act('click-button', { index: Number(target.dataset.index) });
+  } else if (action === 'open-path') {
+    await act('open-path', { path: target.dataset.path });
+  } else if (action === 'open-file') {
+    await act('open-file', { path: target.dataset.path });
   }
 });
 
@@ -252,22 +350,40 @@ els.playBtn.addEventListener('click', () => act('play-video', { index: 0 }));
 els.pauseBtn.addEventListener('click', () => act('pause-video', { index: 0 }));
 els.clickSelectorBtn.addEventListener('click', () => act('click-selector', { selector: els.selectorInput.value.trim() }));
 els.pressKeyBtn.addEventListener('click', () => act('press-key', { key: els.keyInput.value.trim() }));
+els.errorCloseBtn.addEventListener('click', clearError);
 els.chooseOutputBtn.addEventListener('click', async () => {
   try {
     await window.downbrowser.pickOutputDir();
+    clearError();
   } catch (error) {
-    appendLocalError(error.message || String(error));
+    const message = error.message || String(error);
+    showError(message);
+    appendLocalLog('error', message);
   }
 });
 
 window.downbrowser.onState(renderState);
 window.downbrowser.onLog(() => {});
 
+setInterval(async () => {
+  if (!state.data?.recording || state.data.recording.result || state.data.recording.error) {
+    return;
+  }
+  try {
+    const latest = await window.downbrowser.getState();
+    renderState(latest);
+  } catch (error) {
+    showError(error.message || String(error));
+  }
+}, 1000);
+
 (async () => {
   try {
     const initial = await window.downbrowser.getState();
     renderState(initial);
   } catch (error) {
-    appendLocalError(error.message || String(error));
+    const message = error.message || String(error);
+    showError(message);
+    appendLocalLog('error', message);
   }
 })();
