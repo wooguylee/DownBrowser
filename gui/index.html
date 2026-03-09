@@ -43,6 +43,7 @@
           <input id="record-name" type="text" placeholder="optional custom file name">
           <button id="stop-btn" class="stop">Stop</button>
         </div>
+        <label class="check-row"><input id="auto-remux-checkbox" type="checkbox"> Auto remux completed recordings to MP4</label>
       </div>
       <div class="panel-block">
         <h2>Playback Helpers</h2>
@@ -148,6 +149,16 @@
             </div>
           </div>
           <div id="recording-panel" class="recording-panel"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Queue</p>
+              <h3>Recording Manager</h3>
+            </div>
+          </div>
+          <div id="queue-list" class="list"></div>
         </section>
 
         <section class="panel">

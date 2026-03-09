@@ -66,6 +66,10 @@ npm run gui
 
 The GUI opens a desktop control panel for tabs, navigation, source discovery, playback helpers, recording, and logs.
 
+- optional auto-remux to MP4 after recording completes
+- notification popups for recording success/failure
+- queued recording manager for serial downloads
+
 ## CLI Usage
 
 ```bash

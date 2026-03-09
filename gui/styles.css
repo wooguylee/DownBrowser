@@ -148,6 +148,20 @@ label {
   gap: 10px;
 }
 
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.check-row input {
+  width: auto;
+}
+
 .compact-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -318,6 +332,11 @@ button.stop {
 
 .recording-actions button {
   padding: 10px 14px;
+}
+
+.queue-item {
+  display: grid;
+  gap: 8px;
 }
 
 .recording-metric {

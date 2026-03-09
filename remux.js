@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 const path = require('node:path');
-const fs = require('node:fs');
-const { spawn } = require('node:child_process');
+const { runFfmpegRemux } = require('./lib/remux-helper');
 
 function printHelp() {
   console.log(`Usage:
@@ -52,45 +51,14 @@ function parseArgs(argv) {
   return options;
 }
 
-function buildOutputPath(inputPath, explicitOutput, format) {
-  if (explicitOutput) {
-    return explicitOutput;
-  }
-  const parsed = path.parse(inputPath);
-  return path.join(parsed.dir, `${parsed.name}.${format}`);
-}
-
 async function runFfmpeg(options) {
-  const inputPath = path.resolve(process.cwd(), options.input);
-  if (!fs.existsSync(inputPath)) {
-    throw new Error(`Input file not found: ${inputPath}`);
-  }
-
-  const outputPath = path.resolve(process.cwd(), buildOutputPath(inputPath, options.output, options.format));
-  const args = [];
-
-  if (options.overwrite) {
-    args.push('-y');
-  }
-
-  args.push('-i', inputPath, '-c', 'copy', outputPath);
-
-  await new Promise((resolve, reject) => {
-    const child = spawn(options.ffmpeg, args, {
-      stdio: 'inherit',
-    });
-
-    child.on('error', (error) => {
-      reject(new Error(`Failed to start ffmpeg: ${error.message}`));
-    });
-
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`ffmpeg exited with code ${code}`));
-    });
+  const outputPath = await runFfmpegRemux({
+    input: options.input,
+    output: options.output,
+    format: options.format,
+    overwrite: options.overwrite,
+    ffmpeg: options.ffmpeg,
+    stdio: 'inherit',
   });
 
   console.log(`Remuxed file: ${outputPath}`);

@@ -17,6 +17,7 @@ const els = {
   chooseOutputBtn: document.getElementById('choose-output-btn'),
   outputDir: document.getElementById('output-dir'),
   recordName: document.getElementById('record-name'),
+  autoRemuxCheckbox: document.getElementById('auto-remux-checkbox'),
   stopBtn: document.getElementById('stop-btn'),
   playBtn: document.getElementById('play-btn'),
   pauseBtn: document.getElementById('pause-btn'),
@@ -34,6 +35,7 @@ const els = {
   buttonsList: document.getElementById('buttons-list'),
   segmentsList: document.getElementById('segments-list'),
   recordingPanel: document.getElementById('recording-panel'),
+  queueList: document.getElementById('queue-list'),
   logList: document.getElementById('log-list'),
   errorBanner: document.getElementById('error-banner'),
   errorText: document.getElementById('error-text'),
@@ -148,6 +150,7 @@ function renderSources(currentTab) {
       <div class="list-meta">${escapeHtml(source.url)}</div>
       <div class="item-actions">
         <button data-action="record-source" data-source-index="${index}">Record</button>
+        <button class="ghost" data-action="queue-source" data-source-index="${index}">Queue</button>
       </div>
     </div>
   `).join('');
@@ -211,6 +214,28 @@ function renderSegments(currentTab) {
   `).join('');
 }
 
+function renderQueue(queue) {
+  if (!queue || !queue.length) {
+    els.queueList.innerHTML = '<div class="list-item"><div class="list-title">Queue is empty</div><div class="list-meta">Use Queue on a source card to schedule follow-up recordings.</div></div>';
+    return;
+  }
+
+  els.queueList.innerHTML = queue.map((job) => `
+    <div class="list-item queue-item">
+      <div class="list-title">Job ${escapeHtml(String(job.id).slice(-6))}</div>
+      <div class="pill-row">
+        <span class="pill">tab ${job.tabId}</span>
+        <span class="pill gold">source ${job.sourceIndex}</span>
+        <span class="pill ${job.status === 'failed' ? 'warn' : ''}">${escapeHtml(job.status)}</span>
+      </div>
+      <div class="list-meta">name: ${escapeHtml(job.name || '(auto)')}</div>
+      ${job.outputPath ? `<div class="list-meta">saved: ${escapeHtml(job.outputPath)}</div>` : ''}
+      ${job.remuxPath ? `<div class="list-meta">remux: ${escapeHtml(job.remuxPath)}</div>` : ''}
+      ${job.error ? `<div class="list-meta">error: ${escapeHtml(job.error)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
 function renderRecording(data) {
   if (!data.recording) {
     els.recordingPanel.innerHTML = '<div class="recording-card"><div class="list-title">No active recording</div><div class="list-meta">Choose a source and start recording from the current tab.</div></div>';
@@ -222,8 +247,11 @@ function renderRecording(data) {
   const progressPercent = expectedSegments ? Math.min(100, Math.round((recording.segmentCount / expectedSegments) * 100)) : null;
   const lastSegmentUrl = recording.lastSegment ? recording.lastSegment.url : '(waiting for first segment)';
   const eta = recording.estimatedRemainingMs ? formatDuration(recording.estimatedRemainingMs) : 'calculating';
+  const remuxText = recording.remux
+    ? `remux ${recording.remux.status}${recording.remux.outputPath ? `: ${recording.remux.outputPath}` : recording.remux.error ? `: ${recording.remux.error}` : ''}`
+    : '';
   const openButton = recording.result
-    ? `<div class="recording-actions"><button data-action="open-file" data-path="${escapeHtml(recording.result.combinedOutputPath)}">Open Video</button><button class="ghost" data-action="open-path" data-path="${escapeHtml(recording.result.combinedOutputPath)}">Show Saved File</button><button class="ghost" data-action="open-path" data-path="${escapeHtml(recording.result.metadataPath)}">Show Metadata</button></div>`
+    ? `<div class="recording-actions"><button data-action="open-file" data-path="${escapeHtml(recording.result.combinedOutputPath)}">Open Video</button><button class="ghost" data-action="open-path" data-path="${escapeHtml(recording.result.combinedOutputPath)}">Show Saved File</button><button class="ghost" data-action="open-path" data-path="${escapeHtml(recording.result.metadataPath)}">Show Metadata</button>${recording.remux?.outputPath ? `<button class="ghost" data-action="open-file" data-path="${escapeHtml(recording.remux.outputPath)}">Open MP4</button>` : ''}</div>`
     : '';
 
   els.recordingPanel.innerHTML = `
@@ -279,6 +307,7 @@ function renderRecording(data) {
       <div class="list-meta">Source: ${escapeHtml(recording.source.url)}</div>
       <div class="list-meta">Last segment: ${escapeHtml(lastSegmentUrl)}</div>
       ${recording.result ? `<div class="list-meta">saved: ${escapeHtml(recording.result.combinedOutputPath)}</div>` : ''}
+      ${remuxText ? `<div class="list-meta">${escapeHtml(remuxText)}</div>` : ''}
       ${recording.error ? `<div class="list-meta">error: ${escapeHtml(recording.error)}</div>` : ''}
       ${openButton}
     </div>
@@ -299,6 +328,7 @@ function renderState(data) {
   state.data = data;
   const currentTab = data.currentTab;
   els.outputDir.value = data.options.outputDir;
+  els.autoRemuxCheckbox.checked = Boolean(data.options.autoRemux);
   els.pageTitle.textContent = currentTab ? currentTab.title : 'No active tab';
   els.pageUrl.textContent = currentTab ? currentTab.url : '';
   els.freshnessText.textContent = currentTab ? (currentTab.freshness.isFresh ? 'Fresh' : 'Stale') : 'Unknown';
@@ -310,6 +340,7 @@ function renderState(data) {
   renderButtons(currentTab);
   renderSegments(currentTab);
   renderRecording(data);
+  renderQueue(data.queue || []);
   renderLogs(data.logs || []);
 }
 
@@ -326,6 +357,8 @@ document.addEventListener('click', async (event) => {
     await act('close-tab', { tabId: Number(target.dataset.tabId) });
   } else if (action === 'record-source') {
     await act('start-recording', { sourceIndex: Number(target.dataset.sourceIndex), name: els.recordName.value.trim() });
+  } else if (action === 'queue-source') {
+    await act('queue-recording', { sourceIndex: Number(target.dataset.sourceIndex), name: els.recordName.value.trim() });
   } else if (action === 'play-video') {
     await act('play-video', { index: Number(target.dataset.index) });
   } else if (action === 'pause-video') {
@@ -351,6 +384,16 @@ els.pauseBtn.addEventListener('click', () => act('pause-video', { index: 0 }));
 els.clickSelectorBtn.addEventListener('click', () => act('click-selector', { selector: els.selectorInput.value.trim() }));
 els.pressKeyBtn.addEventListener('click', () => act('press-key', { key: els.keyInput.value.trim() }));
 els.errorCloseBtn.addEventListener('click', clearError);
+els.autoRemuxCheckbox.addEventListener('change', async () => {
+  try {
+    const nextState = await window.downbrowser.setAutoRemux(els.autoRemuxCheckbox.checked);
+    renderState(nextState);
+  } catch (error) {
+    const message = error.message || String(error);
+    showError(message);
+    appendLocalLog('error', message);
+  }
+});
 els.chooseOutputBtn.addEventListener('click', async () => {
   try {
     await window.downbrowser.pickOutputDir();

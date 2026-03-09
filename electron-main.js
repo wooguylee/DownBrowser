@@ -114,6 +114,13 @@ ipcMain.handle('downbrowser:pick-output-dir', async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle('downbrowser:set-auto-remux', async (_event, enabled) => {
+  ensureCore().setAutoRemux(enabled);
+  const state = await ensureCore().getState();
+  sendState(state);
+  return state;
+});
+
 ipcMain.handle('downbrowser:action', async (_event, action, payload = {}) => {
   try {
     const guiCore = ensureCore();
@@ -160,6 +167,9 @@ ipcMain.handle('downbrowser:action', async (_event, action, payload = {}) => {
         break;
       case 'start-recording':
         state = await guiCore.startRecording(payload.sourceIndex, payload.name);
+        break;
+      case 'queue-recording':
+        state = await guiCore.enqueueRecording(payload.sourceIndex, payload.name);
         break;
       case 'stop-recording':
         state = await guiCore.stopRecording();

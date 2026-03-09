@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('downbrowser', {
   getState: () => ipcRenderer.invoke('downbrowser:get-state'),
   act: (action, payload) => ipcRenderer.invoke('downbrowser:action', action, payload),
   pickOutputDir: () => ipcRenderer.invoke('downbrowser:pick-output-dir'),
+  setAutoRemux: (enabled) => ipcRenderer.invoke('downbrowser:set-auto-remux', enabled),
   onState: (callback) => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('downbrowser:state', listener);
