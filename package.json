@@ -7,6 +7,9 @@
     "download": "node index.js",
     "interactive": "node index.js --interactive",
     "start": "electron .",
+    "gui": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
     "remux": "node remux.js",
     "test": "node index.js --help"
   },
@@ -19,6 +22,39 @@
     "playwright": "^1.58.2"
   },
   "devDependencies": {
-    "electron": "^40.8.0"
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.downbrowser.desktop",
+    "productName": "DownBrowser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "assets/**/*",
+      "electron-main.js",
+      "electron-preload.js",
+      "index.js",
+      "remux.js",
+      "package.json",
+      "lib/**/*",
+      "gui/**/*",
+      "demo.html",
+      "server.js",
+      "README.md",
+      "README.ko.md"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   }
 }

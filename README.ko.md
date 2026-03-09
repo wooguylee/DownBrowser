@@ -70,6 +70,19 @@ GUI에서는 탭 관리, URL 이동, source 탐지, 재생 보조, 녹화 시작
 - 녹화 완료 후 자동 MP4 remux 옵션
 - 녹화 성공/실패 시스템 알림
 - 순차 처리용 녹화 큐 매니저
+- 큐 항목 retry / remove / cancel 제어
+- 완료 / 실패 / 취소 작업 히스토리 패널
+
+### 5. Windows 빌드 패키징
+
+```bash
+npm run pack
+npm run dist
+```
+
+- `npm run pack`: `dist/`에 unpacked Electron 앱 생성
+- `npm run dist`: `dist/`에 NSIS Windows 설치 파일 생성
+- 앱 아이콘은 `assets/icon.ico`를 사용
 
 ## 실행 방법
 

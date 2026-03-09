@@ -36,6 +36,7 @@ const els = {
   segmentsList: document.getElementById('segments-list'),
   recordingPanel: document.getElementById('recording-panel'),
   queueList: document.getElementById('queue-list'),
+  historyList: document.getElementById('history-list'),
   logList: document.getElementById('log-list'),
   errorBanner: document.getElementById('error-banner'),
   errorText: document.getElementById('error-text'),
@@ -220,18 +221,55 @@ function renderQueue(queue) {
     return;
   }
 
-  els.queueList.innerHTML = queue.map((job) => `
-    <div class="list-item queue-item">
-      <div class="list-title">Job ${escapeHtml(String(job.id).slice(-6))}</div>
-      <div class="pill-row">
-        <span class="pill">tab ${job.tabId}</span>
-        <span class="pill gold">source ${job.sourceIndex}</span>
-        <span class="pill ${job.status === 'failed' ? 'warn' : ''}">${escapeHtml(job.status)}</span>
+  els.queueList.innerHTML = queue.map((job) => {
+    const canRetry = job.status === 'failed';
+    const canCancel = job.status === 'queued';
+    const canRemove = job.status !== 'running' && job.status !== 'starting';
+    return `
+      <div class="list-item queue-item">
+        <div class="list-title">Job ${escapeHtml(String(job.id).slice(-6))}</div>
+        <div class="pill-row">
+          <span class="pill">tab ${job.tabId}</span>
+          <span class="pill gold">source ${job.sourceIndex}</span>
+          <span class="pill ${job.status === 'failed' ? 'warn' : ''}">${escapeHtml(job.status)}</span>
+        </div>
+        <div class="list-meta">name: ${escapeHtml(job.name || '(auto)')}</div>
+        ${job.outputPath ? `<div class="list-meta">saved: ${escapeHtml(job.outputPath)}</div>` : ''}
+        ${job.remuxPath ? `<div class="list-meta">remux: ${escapeHtml(job.remuxPath)}</div>` : ''}
+        ${job.error ? `<div class="list-meta">error: ${escapeHtml(job.error)}</div>` : ''}
+        <div class="item-actions">
+          ${canRetry ? `<button data-action="retry-queue-job" data-job-id="${job.id}">Retry</button>` : ''}
+          ${canCancel ? `<button class="ghost" data-action="cancel-queue-job" data-job-id="${job.id}">Cancel</button>` : ''}
+          ${canRemove ? `<button class="ghost" data-action="remove-queue-job" data-job-id="${job.id}">Remove</button>` : ''}
+        </div>
       </div>
-      <div class="list-meta">name: ${escapeHtml(job.name || '(auto)')}</div>
-      ${job.outputPath ? `<div class="list-meta">saved: ${escapeHtml(job.outputPath)}</div>` : ''}
-      ${job.remuxPath ? `<div class="list-meta">remux: ${escapeHtml(job.remuxPath)}</div>` : ''}
-      ${job.error ? `<div class="list-meta">error: ${escapeHtml(job.error)}</div>` : ''}
+    `;
+  }).join('');
+}
+
+function renderHistory(history) {
+  if (!history || !history.length) {
+    els.historyList.innerHTML = '<div class="list-item"><div class="list-title">No history yet</div><div class="list-meta">Completed, failed, and cancelled jobs will appear here.</div></div>';
+    return;
+  }
+
+  els.historyList.innerHTML = history.map((entry) => `
+    <div class="list-item queue-item">
+      <div class="list-title">${escapeHtml(entry.name || '(auto)')}</div>
+      <div class="pill-row">
+        <span class="pill">tab ${entry.tabId}</span>
+        <span class="pill gold">source ${entry.sourceIndex}</span>
+        <span class="pill ${entry.status === 'failed' || entry.status === 'cancelled' ? 'warn' : ''}">${escapeHtml(entry.status)}</span>
+      </div>
+      ${entry.completedAt ? `<div class="list-meta">completed: ${escapeHtml(new Date(entry.completedAt).toLocaleString())}</div>` : ''}
+      ${entry.outputPath ? `<div class="list-meta">saved: ${escapeHtml(entry.outputPath)}</div>` : ''}
+      ${entry.remuxPath ? `<div class="list-meta">remux: ${escapeHtml(entry.remuxPath)}</div>` : ''}
+      ${entry.error ? `<div class="list-meta">error: ${escapeHtml(entry.error)}</div>` : ''}
+      <div class="item-actions">
+        ${entry.outputPath ? `<button data-action="open-file" data-path="${escapeHtml(entry.outputPath)}">Open</button>` : ''}
+        ${entry.outputPath ? `<button class="ghost" data-action="open-path" data-path="${escapeHtml(entry.outputPath)}">Show</button>` : ''}
+        ${entry.remuxPath ? `<button class="ghost" data-action="open-file" data-path="${escapeHtml(entry.remuxPath)}">Open MP4</button>` : ''}
+      </div>
     </div>
   `).join('');
 }
@@ -341,6 +379,7 @@ function renderState(data) {
   renderSegments(currentTab);
   renderRecording(data);
   renderQueue(data.queue || []);
+  renderHistory(data.history || []);
   renderLogs(data.logs || []);
 }
 
@@ -369,6 +408,12 @@ document.addEventListener('click', async (event) => {
     await act('open-path', { path: target.dataset.path });
   } else if (action === 'open-file') {
     await act('open-file', { path: target.dataset.path });
+  } else if (action === 'cancel-queue-job') {
+    await act('cancel-queue-job', { jobId: Number(target.dataset.jobId) });
+  } else if (action === 'remove-queue-job') {
+    await act('remove-queue-job', { jobId: Number(target.dataset.jobId) });
+  } else if (action === 'retry-queue-job') {
+    await act('retry-queue-job', { jobId: Number(target.dataset.jobId) });
   }
 });
 

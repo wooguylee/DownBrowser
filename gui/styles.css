@@ -339,6 +339,12 @@ button.stop {
   gap: 8px;
 }
 
+.grid-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
 .recording-metric {
   padding: 12px;
   border-radius: 16px;
@@ -370,6 +376,10 @@ button.stop {
   }
 
   .grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-three {
     grid-template-columns: 1fr;
   }
 }

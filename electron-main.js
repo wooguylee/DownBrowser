@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
 const { DownBrowserGuiCore } = require('./lib/downbrowser-gui-core');
+const iconPath = path.join(__dirname, 'assets', 'icon.ico');
 
 let mainWindow = null;
 let core = null;
@@ -20,10 +21,14 @@ function maybeNotifyRecording(state) {
     }
     lastRecordingNoticeKey = key;
     if (Notification.isSupported()) {
-      new Notification({
+      const notification = new Notification({
         title: 'DownBrowser Recording Complete',
         body: recording.result.combinedOutputPath,
-      }).show();
+      });
+      notification.on('click', () => {
+        shell.showItemInFolder(recording.result.combinedOutputPath);
+      });
+      notification.show();
     }
     return;
   }
@@ -35,10 +40,11 @@ function maybeNotifyRecording(state) {
     }
     lastRecordingNoticeKey = key;
     if (Notification.isSupported()) {
-      new Notification({
+      const notification = new Notification({
         title: 'DownBrowser Recording Failed',
         body: recording.error,
-      }).show();
+      });
+      notification.show();
     }
     return;
   }
@@ -71,6 +77,7 @@ async function createMainWindow() {
     minWidth: 1120,
     minHeight: 760,
     backgroundColor: '#ebe5d6',
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'electron-preload.js'),
       contextIsolation: true,
@@ -170,6 +177,15 @@ ipcMain.handle('downbrowser:action', async (_event, action, payload = {}) => {
         break;
       case 'queue-recording':
         state = await guiCore.enqueueRecording(payload.sourceIndex, payload.name);
+        break;
+      case 'cancel-queue-job':
+        state = await guiCore.cancelQueueJob(payload.jobId);
+        break;
+      case 'remove-queue-job':
+        state = await guiCore.removeQueueJob(payload.jobId);
+        break;
+      case 'retry-queue-job':
+        state = await guiCore.retryQueueJob(payload.jobId);
         break;
       case 'stop-recording':
         state = await guiCore.stopRecording();

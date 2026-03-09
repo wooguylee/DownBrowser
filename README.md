@@ -69,6 +69,19 @@ The GUI opens a desktop control panel for tabs, navigation, source discovery, pl
 - optional auto-remux to MP4 after recording completes
 - notification popups for recording success/failure
 - queued recording manager for serial downloads
+- queue item controls for retry, remove, and cancel
+- recording history panel for completed, failed, and cancelled jobs
+
+### 5. Package a Windows build
+
+```bash
+npm run pack
+npm run dist
+```
+
+- `npm run pack`: create an unpacked Electron app in `dist/`
+- `npm run dist`: create an NSIS Windows installer in `dist/`
+- custom app icon is loaded from `assets/icon.ico`
 
 ## CLI Usage
 
